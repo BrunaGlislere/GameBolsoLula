@@ -5,6 +5,13 @@
 
 Jogo 2D em HTML/CSS/JS (Canvas) — controle um macaco Mailon tentando chegar à fronteira sem encostar nos obstáculos. Há uma caixa de "Sonegação" que transforma o macaco em um gorila após ~2 segundos. Fundo com favela (imagem) até metade do mapa e árvores no restante, com transição suave e bandeira de chegada.
 
+## Executar (HTML)
+```
+Descompacte a pasta para habilitar os assets
+Acesse GameBolsoLula-main\GameBolsoLula-main\jogo-fuga-mapa-brasil\index.html
+Deleite-se nessa obra de arte
+```
+
 ## Executar (desktop com pywebview)
 ```
 pip install -r requirements.txt
