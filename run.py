@@ -23,7 +23,7 @@ def main():
 
     # Abre a janela carregando o arquivo local
     window = webview.create_window(
-        title="Fuga do Mapa do Brasil",
+        title="Fuga do Macaco Mailon",
         url=index_path.as_uri(),
         width=1100,
         height=700,
