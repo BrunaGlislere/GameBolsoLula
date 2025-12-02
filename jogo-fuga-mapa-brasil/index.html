@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fuga do Mapa do Brasil</title>
+    <style>
+      :root { --bg:#0e1a2a; --panel:#0b1220cc; --text:#e9f0f5; --accent:#ffd54a; }
+      html, body { height:100% }
+      body { margin:0; background: radial-gradient(1200px 800px at 50% 10%, #14263f, var(--bg)); color:var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji", "Segoe UI Emoji"; display:grid; place-items:center }
+      .wrap { width:min(100vw, 1100px); padding:16px; box-sizing:border-box }
+      header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; gap:12px }
+      h1 { margin:0; font-size:18px; letter-spacing:.3px }
+      .hint { opacity:.85; font-size:13px }
+      .actions { display:flex; align-items:center; gap:8px }
+      .btn { appearance:none; background:#1a2637; color:var(--text); border:1px solid rgba(255,255,255,.1); border-radius:8px; padding:6px 10px; font-size:13px; cursor:pointer }
+      .btn:hover{ filter:brightness(1.05) } .btn:active{ transform: translateY(1px) }
+      .board { position:relative; border-radius:10px; overflow:hidden; box-shadow:0 10px 24px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.06); background: linear-gradient(#7ec8ff, #3a76b8) }
+      canvas { display:block; width:100%; height:auto; background:transparent }
+      .overlay { position:absolute; inset:0; display:none; align-items:center; justify-content:center; backdrop-filter: blur(1.5px) }
+      .panel { background:var(--panel); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:20px 18px; text-align:center; min-width:280px; max-width:min(92vw, 500px) }
+      .panel h2{ margin:0 0 8px; font-size:22px } .panel p{ margin:0 0 16px; opacity:.9; font-size:14px }
+      .panel button{ appearance:none; background:linear-gradient(180deg,var(--accent),#f0b100); color:#2b2b2b; border:none; border-radius:10px; padding:10px 14px; font-weight:700; letter-spacing:.2px; box-shadow:0 6px 16px rgba(0,0,0,.35); cursor:pointer }
+      .panel button:hover{ filter:brightness(1.05) } .panel button:active{ transform: translateY(1px) }
+      footer{ margin-top:8px; opacity:.75; font-size:12px; text-align:center }
+      .touch{ position:absolute; inset:auto 0 8px 0; display:flex; justify-content:space-between; align-items:center; padding:0 12px; pointer-events:none }
+      .touch .btn-touch{ pointer-events:auto; background:rgba(0,0,0,.3); color:#fff; border:1px solid rgba(255,255,255,.2); border-radius:12px; padding:10px 14px; font-size:16px; user-select:none }
+      @media (min-width:900px){ .touch{ display:none } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Fuga do Mapa do Brasil</h1>
+        <div class="hint">Controles: A/D ou ←/→ • Espaço/↑ • E (entrar)</div>
+      </header>
+      <div class="actions" style="justify-content:flex-end; margin:6px 0 4px;">
+        <button id="btn-mute" class="btn" type="button" title="Ativar/Desativar som">🔊 Som</button>
+        <button id="btn-fullscreen" class="btn" type="button" title="Tela cheia">⛶ Tela cheia</button>
+      </div>
+      <div class="board">
+        <canvas id="game" width="960" height="540" aria-label="Jogo: Fuga do Mapa do Brasil"></canvas>
+
+        <div id="overlay" class="overlay">
+          <div class="panel">
+            <h2 id="overlay-title">Game Over</h2>
+            <p id="overlay-text">O macaco caiu! Tente novamente.</p>
+            <button id="btn-restart" type="button">Reiniciar</button>
+          </div>
+        </div>
+
+        <div id="menu-overlay" class="overlay">
+          <div class="panel">
+            <h2>Fuga do Mapa do Brasil</h2>
+            <p>Demo 2D • HTML5 Canvas</p>
+            <div style="text-align:left; margin:8px auto 14px; font-size:14px; line-height:1.7; max-width:380px;">
+              <div><strong>Controles</strong></div>
+              <div>• A/D ou ←/→: mover</div>
+              <div>• Espaço ou ↑: pular</div>
+              <div>• E: entrar/sair da caixa</div>
+              <div>• Enter ou R: reiniciar</div>
+              <div>• P: pausar/continuar</div>
+            </div>
+            <button id="btn-start" type="button">Iniciar Jogo</button>
+            <div style="margin-top:10px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+              <button id="btn-exit" type="button">Sair</button>
+            </div>
+            <div id="best-time" style="margin-top:10px; font-size:13px; opacity:.9;"></div>
+          </div>
+        </div>
+
+        <div id="pause-overlay" class="overlay">
+          <div class="panel">
+            <h2>Pausado</h2>
+            <p>Pressione P, Enter ou clique para continuar.</p>
+            <button id="btn-continue" type="button">Continuar</button>
+          </div>
+        </div>
+
+        <div class="touch">
+          <div>
+            <button id="btn-left" class="btn-touch" type="button">←</button>
+            <button id="btn-right" class="btn-touch" type="button">→</button>
+          </div>
+          <div>
+            <button id="btn-jump" class="btn-touch" type="button">⤴ Pular</button>
+          </div>
+        </div>
+      </div>
+      <footer>Desenvolvido em HTML5 Canvas • Sem bibliotecas externas</footer>
+    </div>
+
+    <script>
+      // Canvas e mundo
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const WORLD = { width: 3800, height: canvas.height, groundY: canvas.height - 120 };
+
+      // Estados
+      const GAME = { MENU:'menu', PLAYING:'playing', GAME_OVER:'gameover', WIN:'win' };
+      let state = GAME.MENU;
+      let cameraX = 0;
+      let paused = false, timerFrames = 0, bestTimeSec = Number(localStorage.getItem('bestTimeSec')||'0');
+
+      // Entradas
+      const keys = { left:false, right:false, up:false, interact:false };
+      addEventListener('keydown', (e)=>{
+        if(['ArrowLeft','a','A'].includes(e.key)) keys.left=true;
+        if(['ArrowRight','d','D'].includes(e.key)) keys.right=true;
+        if(['ArrowUp',' ','Space','w','W'].includes(e.key)) keys.up=true;
+        if((e.key||'').toLowerCase()==='e') keys.interact=true;
+        if((state===GAME.GAME_OVER||state===GAME.WIN) && (e.key==='Enter'||e.key.toLowerCase()==='r')){ hideOverlay(); resetGame(); }
+        if(state===GAME.MENU && (e.key==='Enter'||e.key===' ')) startGame();
+        if(state===GAME.PLAYING && e.key.toLowerCase()==='p') togglePause();
+      });
+      addEventListener('keyup', (e)=>{
+        if(['ArrowLeft','a','A'].includes(e.key)) keys.left=false;
+        if(['ArrowRight','d','D'].includes(e.key)) keys.right=false;
+        if(['ArrowUp',' ','Space','w','W'].includes(e.key)) keys.up=false;
+        if((e.key||'').toLowerCase()==='e') keys.interact=false;
+      });
+
+      // Entidades
+      const monkey = { x:80, y:WORLD.groundY-50, w:42, h:50, vx:0, vy:0, speed:2.8, jumpForce:12.0, onGround:false, dead:false, inBox:false, isGorilla:false, boxTimer:0 };
+      let coyoteFrames=0, jumpBufferFrames=0; const COYOTE_MAX=8, JUMP_BUFFER_MAX=8;
+
+      // Imagens/obstáculos
+      const IMAGES={ lula:new Image(), bolsonaro:new Image(), favelaBack:new Image() };
+      IMAGES.lula.src='assets/lula.png'; IMAGES.bolsonaro.src='assets/bolsonaro.png'; IMAGES.favelaBack.src='assets/favela-back.png';
+      const imageReady = (img)=> img && img.complete && img.naturalWidth>0;
+      const obstacles=[]; const addObstacle=(o)=>obstacles.push(o);
+      const triggers=[]; const addTrigger=(o)=>triggers.push(o);
+
+      function setupObstacles(){
+        obstacles.length=0; triggers.length=0;
+        const p=[850,1250,1700,2150,2600,3050,3500];
+        addObstacle(makeHeadLula(p[0], WORLD.groundY));
+        addObstacle(makeHeadBolsonaro(p[1], WORLD.groundY));
+        addObstacle(makeSiglaBlock('INSS', p[2], WORLD.groundY));
+        addObstacle(makeSiglaBlock('IRRF', p[3], WORLD.groundY));
+        addObstacle(makeSiglaBlock('ICMS', p[4], WORLD.groundY));
+        addObstacle(makeSiglaBlock('ITBI', p[5], WORLD.groundY));
+        addObstacle(makeHeadLula(p[6], WORLD.groundY));
+        addTrigger(makeSonegacaoBox(WORLD.width - 520, WORLD.groundY));
+      }
+
+      // Desenho de fundo (favela desfocada)
+      // Camadas de favela pré-renderizadas para melhor performance
+      const FAVELA = { layers: [], spec: [
+        { parallax:.15, baseY:0.55, color:'#263247', alpha:.7, blur:3 },
+        { parallax:.25, baseY:0.62, color:'#2e3d58', alpha:.8, blur:2.5 },
+        { parallax:.35, baseY:0.70, color:'#364a6a', alpha:.9, blur:2 }
+      ] };
+
+      function buildFavelaLayers(){
+        FAVELA.layers = [];
+        const tileW = Math.ceil(canvas.width*1.6); // maior que a tela para parallax deslocar
+        for(const L of FAVELA.spec){
+          const off = document.createElement('canvas');
+          off.width = tileW; off.height = Math.ceil(canvas.height*0.6);
+          const oc = off.getContext('2d');
+          oc.filter = `blur(${L.blur}px)`;
+          const baseY = Math.floor(off.height * (L.baseY - 0.4));
+          let x=-180, end=tileW+180;
+          while(x<end){
+            // Larguras/alturas irregulares e aparência mais "pobre"
+            const w=40+(((x*11)%50)+30)%50; // 40..90
+            const h=60+(((x*7)%90)+20)%90;  // 60..150
+            const y=baseY - h;
+
+            // Paletas de parede/telhado com tons gastos
+            const wallColors=['#6b6560','#7a5e4a','#8a7261','#5e5a55','#7d6d66','#8a4b3a','#665c53','#4f4741'];
+            const roofColors=['#4b5258','#5a6269','#3e464b','#545c63'];
+            const choose=(arr)=>arr[Math.abs((x*131 + h*17) % arr.length)];
+
+            // Corpo da casa
+            oc.fillStyle=choose(wallColors); oc.fillRect(x,y,w,h);
+
+            // Telhado metálico simples
+            oc.fillStyle=choose(roofColors); oc.fillRect(x, y-5, w, 5);
+
+            // Patches (reboco/placas) para aspecto gasto
+            const patchCount = 1 + ((x>>4)&1);
+            for(let p=0;p<patchCount;p++){
+              const pw = 8 + ((x+p*7) % 12);
+              const ph = 6 + ((h+p*5) % 10);
+              const px = x + 4 + ((x*3 + p*19) % Math.max(6, w-14));
+              const py = y + 6 + ((h*5 + p*23) % Math.max(6, h-16));
+              oc.fillStyle = Math.random() < 0.5 ? '#756b63' : '#5a534d';
+              oc.fillRect(px, py, pw, ph);
+            }
+
+            // Janelas pequenas e irregulares (muitas apagadas, algumas gradeadas)
+            const cols=Math.max(2,Math.floor(w/26)), rows=Math.max(1,Math.floor(h/28));
+            for(let cy=0;cy<rows;cy++){
+              for(let cx=0;cx<cols;cx++){
+                if(((cx + cy + (x|0)) % 2)!==0) continue; // menos janelas
+                const wxp = x + 4 + cx*(w/cols) + ((x+cx*3)%4);
+                const wyp = y + 6 + cy*(h/(rows+1));
+                const ww = 7, wh = 9;
+                const lit = ((cx+cy+(w|0)) % 5)===0;
+                oc.fillStyle = lit ? '#d2c16a' : '#1f2430';
+                oc.fillRect(wxp, wyp, ww, wh);
+                // grades em algumas
+                if (!lit && ((cx+cy+(x>>3)) % 3)===0){
+                  oc.strokeStyle = '#2a2a2a'; oc.lineWidth = 1;
+                  oc.beginPath(); oc.moveTo(wxp+2,wyp); oc.lineTo(wxp+2,wyp+wh);
+                  oc.moveTo(wxp+5,wyp); oc.lineTo(wxp+5,wyp+wh); oc.stroke();
+                }
+              }
+            }
+
+            // Caixa d'água (azul) ocasional
+            if (((x>>5) % 4)===0){
+              oc.fillStyle = '#2e66a6';
+              const tx = x + w*0.15, ty = y - 10;
+              oc.fillRect(tx, ty, 12, 8);
+              oc.fillStyle = '#214a77'; oc.fillRect(tx, ty+7, 12, 1);
+            }
+
+            // Antena simples
+            if (((x>>4) % 3)===0){
+              oc.strokeStyle = '#3b3f46'; oc.lineWidth=1;
+              oc.beginPath(); oc.moveTo(x+w*0.8, y-5); oc.lineTo(x+w*0.8, y-16); oc.moveTo(x+w*0.8, y-12); oc.lineTo(x+w*0.8+6, y-14); oc.moveTo(x+w*0.8, y-10); oc.lineTo(x+w*0.8-6, y-12); oc.stroke();
+            }
+
+            // Varal de roupas (retângulos coloridos pendurados)
+            if (((x>>6) % 2)===0){
+              const vx1 = x + 4, vx2 = x + w - 6, vy = y + Math.max(6, (h>>2));
+              oc.strokeStyle = '#3a3a3a'; oc.lineWidth=1; oc.beginPath(); oc.moveTo(vx1,vy); oc.lineTo(vx2, vy-2); oc.stroke();
+              const pieces = 2 + ((w/20)|0);
+              for(let i=0;i<pieces;i++){
+                const px = vx1 + i*((vx2-vx1)/pieces) + ((i%2)?2:-2);
+                const py = vy - 2 + ((i%2)?-1:1);
+                oc.fillStyle = ['#c94f4f','#d9b04c','#4f8a6f','#8c6ab1','#c98d4f'][i%5];
+                oc.fillRect(px, py, 6, 5);
+              }
+            }
+
+            // Pichação/grafite simples perto do chão
+            if (((x>>3) % 4)===1){
+              oc.strokeStyle='#515151'; oc.lineWidth=1; oc.beginPath();
+              oc.moveTo(x+6, y+h-10); oc.lineTo(x+16, y+h-12); oc.lineTo(x+10, y+h-8); oc.stroke();
+            }
+
+            x+=w + 10 + ((x>>3)%6);
+          }
+          FAVELA.layers.push({ canvas: off, parallax: L.parallax, alpha: L.alpha });
+        }
+      }
+
+      function drawFavelaBackground(){
+        if (FAVELA.layers.length===0) buildFavelaLayers();
+        for (const L of FAVELA.layers){
+          const img = L.canvas; const w = img.width; const h = img.height; const y = Math.floor(canvas.height*0.4 - h*0.35);
+          let dx = - (cameraX * L.parallax) % w; if (dx>0) dx -= w;
+          ctx.save(); ctx.globalAlpha = L.alpha;
+          // desenha 2 vezes para cobrir a largura toda
+          ctx.drawImage(img, Math.floor(dx), y);
+          ctx.drawImage(img, Math.floor(dx + w), y);
+          ctx.restore();
+        }
+      }
+
+      // Fundo composto: imagem da favela até metade do mundo; árvores no restante
+      function drawBackground(){
+        const splitWorldX = WORLD.width / 2;
+        const splitScreenX = splitWorldX - cameraX;
+        const blendPx = 220; // largura da faixa de transição
+        const leftEnd = Math.max(0, Math.min(canvas.width, splitScreenX - blendPx/2));
+        const rightStart = Math.max(0, Math.min(canvas.width, splitScreenX + blendPx/2));
+
+        function drawFavelaImageTiled(){
+          if (imageReady(IMAGES.favelaBack)){
+            const img = IMAGES.favelaBack;
+            const scale = canvas.height / img.height;
+            const tileW = img.width * scale;
+            const par = 0.2;
+            let dx = - (cameraX * par) % tileW; if (dx > 0) dx -= tileW;
+            for (let i=0; i<3; i++) ctx.drawImage(img, Math.floor(dx + i*tileW), 0, Math.ceil(tileW), canvas.height);
+            // Gradiente de preto (forte na base → transparente no topo)
+            ctx.save();
+            // Neutraliza efeitos de alpha externos das faixas de mistura, para o gradiente ser perceptível
+            const prevAlpha = ctx.globalAlpha; ctx.globalAlpha = Math.min(1, prevAlpha + 0.6);
+            const vg = ctx.createLinearGradient(0, canvas.height, 0, 0);
+            vg.addColorStop(0.00, 'rgba(0,0,0,0.92)');
+            vg.addColorStop(0.25, 'rgba(0,0,0,0.75)');
+            vg.addColorStop(0.55, 'rgba(0,0,0,0.35)');
+            vg.addColorStop(0.80, 'rgba(0,0,0,0.12)');
+            vg.addColorStop(1.00, 'rgba(0,0,0,0.00)');
+            ctx.fillStyle = vg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.globalAlpha = prevAlpha;
+            ctx.restore();
+          } else {
+            drawFavelaBackground();
+          }
+        }
+
+        // Bloco esquerdo (favela)
+        if (leftEnd > 0){ ctx.save(); ctx.beginPath(); ctx.rect(0, 0, leftEnd, canvas.height); ctx.clip(); drawFavelaImageTiled(); ctx.restore(); }
+        // Bloco direito (árvores)
+        if (rightStart < canvas.width){ ctx.save(); ctx.beginPath(); ctx.rect(rightStart, 0, canvas.width - rightStart, canvas.height); ctx.clip(); drawTreesBackground(); ctx.restore(); }
+        // Faixa de mistura
+        const mixX = Math.max(0, Math.min(canvas.width, splitScreenX - blendPx/2));
+        const mixW = Math.max(0, Math.min(canvas.width, splitScreenX + blendPx/2) - mixX);
+        if (mixW > 0){
+          const stripes = 28;
+          const step = mixW / stripes;
+          for (let i=0; i<stripes; i++){
+            const sx = Math.floor(mixX + i*step);
+            const w = Math.ceil(step+1);
+            const t = i/(stripes-1); // 0..1
+            // Favela decai de 1 -> 0
+            ctx.save(); ctx.beginPath(); ctx.rect(sx, 0, w, canvas.height); ctx.clip(); ctx.globalAlpha = 1 - t; drawFavelaImageTiled(); ctx.restore();
+            // Árvores crescem de 0 -> 1
+            ctx.save(); ctx.beginPath(); ctx.rect(sx, 0, w, canvas.height); ctx.clip(); ctx.globalAlpha = t; drawTreesBackground(); ctx.restore();
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      function drawTreesBackground(){
+        const h = canvas.height;
+        // Camada distante
+        ctx.save();
+        const par1 = 0.15, baseY1 = h*0.55;
+        ctx.translate(-cameraX*par1, 0);
+        ctx.fillStyle = '#254b3d';
+        ctx.beginPath(); ctx.moveTo(-200, baseY1);
+        for(let x=-200; x<=canvas.width+200; x+=40){
+          const peak = baseY1 - 12 - 8*Math.sin(x*0.03);
+          ctx.lineTo(x, peak); ctx.lineTo(x+20, baseY1+6);
+        }
+        ctx.lineTo(canvas.width+240, h); ctx.lineTo(-200, h); ctx.closePath(); ctx.fill();
+        // Camada média: árvores
+        const par2 = 0.3, baseY2 = h*0.62; ctx.translate(cameraX*par1 - cameraX*par2, 0);
+        for (let x=-180; x<=canvas.width+180; x+=60){
+          const trunkH = 30 + ((x*13)%20); const trunkX = x + ((x>>3)%6);
+          ctx.fillStyle = '#3b2e21'; ctx.fillRect(trunkX, baseY2 - trunkH, 4, trunkH);
+          ctx.fillStyle = '#245c30';
+          ctx.beginPath(); ctx.ellipse(trunkX+2, baseY2 - trunkH - 8, 16, 10, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(trunkX-8, baseY2 - trunkH, 12, 8, 0, 0, Math.PI*2); ctx.ellipse(trunkX+12, baseY2 - trunkH+2, 12, 8, 0, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      // Solo e personagem
+      function drawGround(){ ctx.fillStyle='#7b5e3b'; ctx.fillRect(0,WORLD.groundY+10,canvas.width,canvas.height-WORLD.groundY); ctx.fillStyle='#3f8f4d'; ctx.beginPath(); ctx.moveTo(0,WORLD.groundY); for(let x=0;x<=canvas.width;x+=16){ const y=WORLD.groundY+Math.sin((x+cameraX)*.02)*2; ctx.lineTo(x,y) } ctx.lineTo(canvas.width,canvas.height); ctx.lineTo(0,canvas.height); ctx.closePath(); ctx.fill() }
+      function drawMonkey(){ const x=Math.floor(monkey.x-cameraX), y=Math.floor(monkey.y); ctx.save(); ctx.translate(x+monkey.w/2,y+monkey.h/2); const facing=monkey.vx>=-0.1?1:-1; ctx.scale(facing,1);
+        if(!monkey.isGorilla){ ctx.fillStyle='#8d5a2b'; ctx.beginPath(); ctx.ellipse(0,10,18,22,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#a56a3a'; ctx.beginPath(); ctx.ellipse(0,-12,16,14,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#d59d6a'; ctx.beginPath(); ctx.ellipse(2,-10,10,8,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(3,-13,2,0,Math.PI*2); ctx.arc(9,-12,2,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#a56a3a'; ctx.beginPath(); ctx.arc(-15,-16,5,0,Math.PI*2); ctx.arc(15,-16,5,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#6b3e1a'; ctx.lineWidth=4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-10,0); ctx.lineTo(-20,8); ctx.moveTo(10,0); ctx.lineTo(20,8); ctx.moveTo(-6,18); ctx.lineTo(-14,26); ctx.moveTo(6,18); ctx.lineTo(14,26); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-12,12); ctx.quadraticCurveTo(-28,6,-22,-2); ctx.stroke(); }
+        else { ctx.fillStyle='#3b2e21'; ctx.beginPath(); ctx.ellipse(0,14,24,30,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#6e6258'; ctx.beginPath(); ctx.ellipse(0,10,16,18,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#3b2e21'; ctx.beginPath(); ctx.moveTo(-24,2); ctx.quadraticCurveTo(-30,-4,-18,-6); ctx.quadraticCurveTo(-6,-8,0,-8); ctx.quadraticCurveTo(6,-8,18,-6); ctx.quadraticCurveTo(30,-4,24,2); ctx.closePath(); ctx.fill(); ctx.fillStyle='#4a3b2b'; ctx.beginPath(); ctx.ellipse(2,-14,17,14,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#3b2e21'; ctx.beginPath(); ctx.arc(2,-22,8,Math.PI,2*Math.PI); ctx.fill(); ctx.fillStyle='#2a241c'; ctx.beginPath(); ctx.ellipse(4,-10,11,9,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#090909'; ctx.beginPath(); ctx.arc(0,-13,1.7,0,Math.PI*2); ctx.arc(6,-12.5,1.7,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#33271d'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,-5); ctx.quadraticCurveTo(6,-3,10,-5); ctx.stroke(); ctx.fillStyle='#4a3b2b'; ctx.beginPath(); ctx.arc(-14,-14,3,0,Math.PI*2); ctx.arc(18,-14,3,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#2f2419'; ctx.lineWidth=7; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-14,2); ctx.quadraticCurveTo(-30,10,-26,24); ctx.moveTo(14,2); ctx.quadraticCurveTo(30,10,26,24); ctx.stroke(); ctx.fillStyle='#2f2419'; ctx.beginPath(); ctx.ellipse(-26,26,4.5,3.2,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(26,26,4.5,3.2,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.moveTo(-6,26); ctx.lineWidth=6; ctx.strokeStyle='#2f2419'; ctx.lineCap='round'; ctx.lineTo(-12,34); ctx.moveTo(6,26); ctx.lineTo(12,34); ctx.stroke(); }
+        ctx.restore(); }
+
+      // Obstáculos
+      function makeHeadLula(x,g){ const s=56; return { type:'lula', x, y:g-s, w:s, h:s, draw(){ const sx=Math.floor(this.x-cameraX), sy=Math.floor(this.y); ctx.save(); if(imageReady(IMAGES.lula)){ ctx.save(); ctx.beginPath(); ctx.arc(sx+this.w/2,sy+this.h/2,this.w/2,0,Math.PI*2); ctx.clip(); ctx.drawImage(IMAGES.lula,sx,sy,this.w,this.h); ctx.restore(); ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(sx+this.w/2,sy+this.h/2,this.w/2-1.5,0,Math.PI*2); ctx.stroke(); } else { ctx.translate(sx+this.w/2,sy+this.h/2); ctx.fillStyle='#f1d2b6'; ctx.beginPath(); ctx.ellipse(0,4,22,24,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#c6c6c6'; ctx.beginPath(); ctx.ellipse(0,-8,24,18,0,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.ellipse(0,18,20,12,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(-6,2,2,0,Math.PI*2); ctx.arc(6,2,2,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#775e4b'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,10,8,.15*Math.PI,.85*Math.PI); ctx.stroke(); } ctx.restore(); } } }
+      function makeHeadBolsonaro(x,g){ const s=56; return { type:'bolsonaro', x, y:g-s, w:s, h:s, draw(){ const sx=Math.floor(this.x-cameraX), sy=Math.floor(this.y); ctx.save(); if(imageReady(IMAGES.bolsonaro)){ ctx.save(); ctx.beginPath(); ctx.arc(sx+this.w/2,sy+this.h/2,this.w/2,0,Math.PI*2); ctx.clip(); ctx.drawImage(IMAGES.bolsonaro,sx,sy,this.w,this.h); ctx.restore(); ctx.strokeStyle='rgba(0,0,0,.25)'; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(sx+this.w/2,sy+this.h/2,this.w/2-1.5,0,Math.PI*2); ctx.stroke(); } else { ctx.translate(sx+this.w/2,sy+this.h/2); ctx.fillStyle='#efd1b2'; ctx.beginPath(); ctx.ellipse(0,4,22,24,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#6b4c2c'; ctx.beginPath(); ctx.ellipse(0,-8,24,18,0,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#4f371e'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-10,-8); ctx.lineTo(10,-8); ctx.stroke(); ctx.fillStyle='#333'; ctx.beginPath(); ctx.arc(-6,2,2,0,Math.PI*2); ctx.arc(6,2,2,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#775e4b'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,10,8,.15*Math.PI,.85*Math.PI); ctx.stroke(); } ctx.restore(); } } }
+      function makeSiglaBlock(text,x,g){ const w=80,h=46; return { type:'sigla', x, y:g-h, w, h, draw(){ const sx=Math.floor(this.x-cameraX), sy=Math.floor(this.y); const grad=ctx.createLinearGradient(sx,sy,sx,sy+this.h); grad.addColorStop(0,'#2a2e3a'); grad.addColorStop(1,'#1e222c'); ctx.fillStyle=grad; ctx.strokeStyle='#455069'; ctx.lineWidth=2; roundRect(ctx,sx,sy,this.w,this.h,8,true,true); ctx.fillStyle='#f1f5fa'; ctx.font='bold 16px Segoe UI, Arial'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(text, sx+this.w/2, sy+this.h/2+1) } } }
+      function roundRect(ctx,x,y,w,h,r,fill,stroke){ if(w<2*r) r=w/2; if(h<2*r) r=h/2; ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); if(fill) ctx.fill(); if(stroke) ctx.stroke(); }
+      function makeSonegacaoBox(x,g){ const w=120,h=80; return { type:'sonegacao', x, y:g-h, w, h, draw(){ const sx=this.x-cameraX, sy=this.y; ctx.save(); ctx.fillStyle='#1f2a3b'; roundRect(ctx,sx,sy,this.w,this.h,10,true,true); ctx.fillStyle='#0e1522'; ctx.fillRect(sx+this.w*.7, sy+this.h-40, 26,40); ctx.strokeStyle='#455069'; ctx.strokeRect(sx+this.w*.7, sy+this.h-40, 26,40); ctx.fillStyle='#f1f5fa'; ctx.font='bold 14px Segoe UI, Arial'; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillText('Sonegação', sx+this.w/2, sy+8); ctx.restore(); }, doorway(){ return { x:this.x+this.w*.7, y:this.y+this.h-40, w:26, h:40 } } } }
+
+      // Partículas
+      const bananas=[]; function spawnBananaRain(){ bananas.length=0; const N=50; for(let i=0;i<N;i++){ const vx=(Math.random()*0.6-0.3); bananas.push({ x:cameraX+Math.random()*canvas.width, y:-40-Math.random()*200, vy:2+Math.random()*2.5, vx, rot:Math.random()*Math.PI*2, vr:(Math.random()*0.06-0.03) }) } }
+      function updateBananas(){ for(const b of bananas){ b.x+=b.vx; b.y+=b.vy; b.rot+=b.vr } }
+      function drawBananas(){ for(const b of bananas){ const sx=b.x-cameraX, sy=b.y; if(sx<-40||sx>canvas.width+40||sy>canvas.height+60) continue; ctx.save(); ctx.translate(sx,sy); ctx.rotate(b.rot); drawBananaShape(); ctx.restore() } }
+      function drawBananaShape(){ ctx.fillStyle='#ffd54a'; ctx.strokeStyle='#cda330'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-8,0); ctx.quadraticCurveTo(2,-10,12,-2); ctx.quadraticCurveTo(2,8,-8,0); ctx.fill(); ctx.stroke(); ctx.fillStyle='#7a4b21'; ctx.beginPath(); ctx.arc(12,-2,2,0,Math.PI*2); ctx.fill() }
+      const confetti=[]; const CONFETTI_COLORS=['#ff5252','#ffd54a','#4dd0e1','#81c784','#ba68c8','#ff8a65'];
+      function spawnConfettiBurst(n=120){ for(let i=0;i<n;i++){ confetti.push({ x:cameraX+Math.random()*canvas.width, y:-20-Math.random()*200, vx:(Math.random()*2-1), vy:1+Math.random()*2.5, g:0.05+Math.random()*0.05, rot:Math.random()*Math.PI*2, vr:(Math.random()*0.2-0.1), size:2+Math.random()*3.5, color:CONFETTI_COLORS[Math.floor(Math.random()*CONFETTI_COLORS.length)] }) } }
+      function updateConfetti(){ for(const c of confetti){ c.vy+=c.g; c.x+=c.vx; c.y+=c.vy; c.rot+=c.vr } for(let i=confetti.length-1;i>=0;i--){ if(confetti[i].y-10>canvas.height+40) confetti.splice(i,1) } }
+      function drawConfetti(){ for(const c of confetti){ const sx=c.x-cameraX, sy=c.y; if(sx<-30||sx>canvas.width+30||sy>canvas.height+40) continue; ctx.save(); ctx.translate(sx,sy); ctx.rotate(c.rot); ctx.fillStyle=c.color; ctx.fillRect(-c.size,-c.size*.5,c.size*2,c.size); ctx.restore() } }
+
+      // Física/Update
+      const GRAVITY=0.38, FRICTION=0.86, MAX_VX=3.8, ACCEL=0.3, APEX_THRESHOLD=1.2, APEX_REDUCE=0.55;
+      function update(){
+        if (paused) return;
+        if(state===GAME.PLAYING){
+          if(monkey.inBox){ monkey.vx=0; monkey.vy=0; monkey.onGround=true; } else { if(keys.left&&!keys.right) monkey.vx-=ACCEL; else if(keys.right&&!keys.left) monkey.vx+=ACCEL; else monkey.vx*=FRICTION; }
+          monkey.vx=Math.max(-MAX_VX, Math.min(MAX_VX, monkey.vx));
+          if(!monkey.inBox){ if(keys.up) jumpBufferFrames=JUMP_BUFFER_MAX; else jumpBufferFrames=Math.max(0,jumpBufferFrames-1); if(monkey.onGround) coyoteFrames=COYOTE_MAX; else coyoteFrames=Math.max(0,coyoteFrames-1); if(jumpBufferFrames>0&&coyoteFrames>0){ monkey.vy=-monkey.jumpForce; monkey.onGround=false; jumpBufferFrames=0; coyoteFrames=0; try{ ensureAudio(); playSfx('jump') }catch(e){} }
+            let g=GRAVITY; if(!monkey.onGround && Math.abs(monkey.vy)<APEX_THRESHOLD) g*=APEX_REDUCE; monkey.vy+=g; if(!keys.up && monkey.vy<-3) monkey.vy*=0.6; monkey.x+=monkey.vx; monkey.y+=monkey.vy; if(monkey.y+monkey.h>=WORLD.groundY){ monkey.y=WORLD.groundY-monkey.h; monkey.vy=0; monkey.onGround=true } else monkey.onGround=false; }
+          else { if(monkey.boxTimer>0) { monkey.boxTimer--; } else { monkey.isGorilla=true; monkey.w=56; monkey.h=66; monkey.speed=3.2; monkey.jumpForce=13.2; const sbox=triggers.find(t=>t.type==='sonegacao'); if(sbox){ monkey.x=sbox.x+sbox.w+6; monkey.y=WORLD.groundY-monkey.h } monkey.inBox=false; } }
+          monkey.x=Math.max(0,Math.min(WORLD.width-monkey.w,monkey.x));
+          cameraX=Math.max(0,Math.min(monkey.x - canvas.width/2 + monkey.w/2, WORLD.width - canvas.width));
+          for(const o of obstacles){ if(aabbSoft(monkey,o)){ triggerGameOver(); break } }
+          const sbox=triggers.find(t=>t.type==='sonegacao'); if(sbox && !monkey.inBox){ const d=sbox.doorway(); if(aabbRaw(monkey,d)&&keys.interact){ monkey.inBox=true; monkey.boxTimer=120; keys.interact=false; monkey.x=d.x + d.w/2 - monkey.w/2; monkey.y=sbox.y + sbox.h - monkey.h } }
+          if(monkey.x + monkey.w >= WORLD.width - 40) triggerWin();
+          timerFrames++;
+        } else if(state===GAME.GAME_OVER){ monkey.vy+=GRAVITY*1.05; monkey.y+=monkey.vy; cameraX=Math.max(0,Math.min(monkey.x - canvas.width/2 + monkey.w/2, WORLD.width - canvas.width)); updateBananas(); if(monkey.y>canvas.height+140) showOverlay('Game Over','O macaco caiu! Tente novamente.','Reiniciar'); }
+        else if(state===GAME.WIN){ if(monkey.y+monkey.h<WORLD.groundY){ monkey.vy+=GRAVITY; monkey.y+=monkey.vy } else { monkey.y=WORLD.groundY-monkey.h; monkey.vy=0 } cameraX=WORLD.width-canvas.width; updateConfetti(); if(confetti.length<200) spawnConfettiBurst(12); if(bananas.length<60&&Math.random()<0.15){ bananas.push({ x:cameraX+Math.random()*canvas.width, y:-40, vy:2+Math.random()*2.5, vx:(Math.random()*0.6-0.3), rot:Math.random()*Math.PI*2, vr:(Math.random()*0.06-0.03) }) } updateBananas(); }
+      }
+
+      // Cena
+      let winOverlayShown=false;
+      function draw(){
+        // céu, favela desfocada e chão
+        const g=ctx.createLinearGradient(0,0,0,canvas.height); g.addColorStop(0,'#7ec8ff'); g.addColorStop(1,'#3a76b8'); ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
+        drawBackground(); drawGround();
+        // Bandeira na fronteira
+        drawFinishFlag();
+        // triggers e obstáculos
+        for(const t of triggers){ const sx=t.x-cameraX; if(sx+t.w<-40||sx>canvas.width+40) continue; t.draw() }
+        for(const o of obstacles){ const sx=o.x-cameraX; if(sx+o.w<-40||sx>canvas.width+40) continue; o.draw() }
+        drawMonkey();
+        // dica para caixa
+        (function(){ const sbox=triggers.find(t=>t.type==='sonegacao'); if(!sbox||monkey.inBox||state!==GAME.PLAYING) return; const d=sbox.doorway(); const near=aabbRaw(monkey,{x:d.x-12,y:d.y-4,w:d.w+24,h:d.h+8}); if(!near) return; const cx=d.x - cameraX + d.w/2; const cy=sbox.y - 16; ctx.save(); ctx.fillStyle='rgba(0,0,0,.4)'; roundRect(ctx,cx-140, cy-18, 280, 24, 8, true, false); ctx.fillStyle='#fff'; ctx.font='bold 12px Segoe UI, Arial'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('Pressione E para entrar na caixa', cx, cy-6); ctx.restore(); })();
+        if(state===GAME.GAME_OVER||state===GAME.WIN) drawBananas(); if(state===GAME.WIN){ drawConfetti(); if(!winOverlayShown){ winOverlayShown=true; setTimeout(()=>showOverlay('Você conseguiu fugir do mapa! 🎉','Que festa! Aproveite a liberdade. \nPressione Enter ou clique para jogar novamente.','Jogar novamente'), 900) } }
+        drawHUD();
+      }
+      function drawHUD(){ const progress=(monkey.x+monkey.w)/WORLD.width; const barW=240, barH=8; const x=canvas.width-barW-16, y=16; ctx.fillStyle='rgba(0,0,0,.25)'; roundRect(ctx,x,y,barW,barH,4,true,false); ctx.fillStyle='#ffd54a'; roundRect(ctx,x,y,Math.max(8,barW*progress),barH,4,true,false); ctx.fillStyle='#fff'; ctx.font='bold 12px Segoe UI, Arial'; ctx.textAlign='right'; ctx.textBaseline='top'; ctx.fillText('Progresso', x+barW, y+12); ctx.textAlign='left'; const sec=(timerFrames/60).toFixed(2); if(state===GAME.PLAYING){ ctx.fillText('Tempo: '+sec+'s',16,16) } else if(state===GAME.WIN){ const best=bestTimeSec ? (bestTimeSec.toFixed(2)+'s'):'-'; ctx.fillText('Tempo: '+sec+'s  Melhor: '+best,16,16) } if(monkey.isGorilla){ ctx.fillText('Forma: Gorila 💪', 16, 36) } }
+
+      // Bandeira de chegada (fronteira)
+      function drawFinishFlag(){
+        const flagX = WORLD.width - 50; // próximo ao fim do mapa
+        const sx = Math.floor(flagX - cameraX);
+        if (sx < -40 || sx > canvas.width + 80) return;
+        const poleH = 90;
+        const baseY = WORLD.groundY;
+        // Poste
+        ctx.fillStyle = '#8f8a84';
+        ctx.fillRect(sx, baseY - poleH, 4, poleH);
+        // Base
+        ctx.fillStyle = '#5e574f';
+        ctx.fillRect(sx-6, baseY - 10, 16, 10);
+        // Bandeira (verde-amarelo-azul estilizado)
+        const t = (timerFrames||0) * 0.08; // leve ondulação
+        const fy = baseY - poleH + 10;
+        ctx.save();
+        ctx.translate(sx+4, fy);
+        // Verde (fundo)
+        ctx.fillStyle = '#1b8f3b';
+        ctx.beginPath();
+        ctx.moveTo(0,0);
+        ctx.bezierCurveTo(18+Math.sin(t)*2, -4, 28+Math.cos(t*0.7)*3, 6, 40, 2);
+        ctx.lineTo(40, 18);
+        ctx.bezierCurveTo(28+Math.cos(t*0.7)*3, 12, 18+Math.sin(t)*2, 22, 0, 18);
+        ctx.closePath();
+        ctx.fill();
+        // Losango amarelo
+        ctx.fillStyle = '#ffd54a';
+        ctx.beginPath();
+        ctx.moveTo(8,9);
+        ctx.lineTo(18,3);
+        ctx.lineTo(28,9);
+        ctx.lineTo(18,15);
+        ctx.closePath();
+        ctx.fill();
+        // Círculo azul
+        ctx.fillStyle = '#1e3f8f';
+        ctx.beginPath();
+        ctx.arc(18,9,4,0,Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Colisão
+      function aabbSoft(a,b){ const padA=6, padB=2; return (a.x+padA<b.x+b.w-padB && a.x+a.w-padA>b.x+padB && a.y+padA<b.y+b.h-padB && a.y+a.h-padA>b.y+padB) }
+      function aabbRaw(a,b){ return (a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y) }
+
+      // Overlays/reset
+      const overlay=document.getElementById('overlay'); const overlayTitle=document.getElementById('overlay-title'); const overlayText=document.getElementById('overlay-text'); const btnRestart=document.getElementById('btn-restart'); const menuOverlay=document.getElementById('menu-overlay'); const btnStart=document.getElementById('btn-start'); const btnExit=document.getElementById('btn-exit');
+      btnRestart.addEventListener('click',()=>{ hideOverlay(); resetGame() }); btnStart.addEventListener('click',()=> startGame()); btnExit?.addEventListener('click',()=>{ try{ window.close() }catch(e){} });
+      function triggerGameOver(){ if(state!==GAME.PLAYING) return; state=GAME.GAME_OVER; monkey.dead=true; monkey.vx=0; monkey.vy=-7.5; spawnBananaRain(); try{ ensureAudio(); playSfx('hit') }catch(e){} }
+      function triggerWin(){ if(state!==GAME.PLAYING) return; state=GAME.WIN; spawnConfettiBurst(200); try{ ensureAudio(); playSfx('win') }catch(e){} const t=timerFrames/60; if(!bestTimeSec||t<bestTimeSec){ bestTimeSec=t; try{ localStorage.setItem('bestTimeSec', String(bestTimeSec)) }catch(e){} } }
+      function showOverlay(title,text,button){ overlayTitle.textContent=title; overlayText.textContent=text; btnRestart.textContent=button||'Reiniciar'; overlay.style.display='flex' }
+      function hideOverlay(){ overlay.style.display='none' }
+      function showMenu(){ menuOverlay.style.display='flex'; const best=document.getElementById('best-time'); if(best){ best.textContent = bestTimeSec?('Melhor tempo: '+bestTimeSec.toFixed(2)+'s'):'' } }
+      function hideMenu(){ menuOverlay.style.display='none' }
+      function startGame(){ hideMenu(); ensureAudio(); resetGame() }
+      function resetGame(){ state=GAME.PLAYING; Object.assign(monkey,{ x:80, y:WORLD.groundY-50, vx:0, vy:0, onGround:false, dead:false, inBox:false, isGorilla:false, boxTimer:0, w:42, h:50, speed:2.8, jumpForce:12.0 }); cameraX=0; setupObstacles(); bananas.length=0; confetti.length=0; winOverlayShown=false; paused=false; timerFrames=0 }
+
+      // Loop
+      function loop(){ update(); draw(); requestAnimationFrame(loop) }
+      setupObstacles(); showMenu(); loop();
+
+      // UX extra: scroll, fullscreen, pausa, áudio, toque
+      const btnMute=document.getElementById('btn-mute'), btnFullscreen=document.getElementById('btn-fullscreen'); const pauseOverlay=document.getElementById('pause-overlay'); const btnContinue=document.getElementById('btn-continue');
+      addEventListener('keydown',(e)=>{ if(["ArrowLeft","ArrowRight","ArrowUp"," ","Space"].includes(e.key)) e.preventDefault() },{passive:false}); addEventListener('keyup',(e)=>{ if(["ArrowLeft","ArrowRight","ArrowUp"," ","Space"].includes(e.key)) e.preventDefault() },{passive:false});
+      btnFullscreen?.addEventListener('click',()=>{ const board=document.querySelector('.board'); if(!document.fullscreenElement) board?.requestFullscreen?.(); else document.exitFullscreen?.() });
+      function togglePause(){ if(state!==GAME.PLAYING) return; paused=!paused; pauseOverlay.style.display = paused?'flex':'none' } function resumeFromPause(){ if(paused){ paused=false; pauseOverlay.style.display='none' } } btnContinue?.addEventListener('click',resumeFromPause); addEventListener('keydown',(e)=>{ if(e.key&&e.key.toLowerCase()==='p') togglePause(); if((e.key==='Enter'||e.key===' ')&&paused) resumeFromPause() });
+      let audioCtx=null; let muted=localStorage.getItem('muted')==='1'; function ensureAudio(){ if(!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)() }catch(e){} } } function updateMuteButton(){ if(btnMute) btnMute.textContent = muted?'🔇 Silenciado':'🔊 Som' } updateMuteButton(); btnMute?.addEventListener('click',()=>{ muted=!muted; try{ localStorage.setItem('muted', muted?'1':'0') }catch(e){}; updateMuteButton() });
+      function playSfx(type){ if(muted||!audioCtx) return; const now=audioCtx.currentTime; const tone=(f,d=.08,t='sine',g=.07,delay=0)=>{ const start=now+(delay||0); const osc=audioCtx.createOscillator(); const gg=audioCtx.createGain(); osc.type=t; osc.frequency.value=f; gg.gain.setValueAtTime(g,start); gg.gain.exponentialRampToValueAtTime(.0001,start+d); osc.connect(gg).connect(audioCtx.destination); osc.start(start); osc.stop(start+d) }; if(type==='jump'){ tone(650,.07,'square',.06); tone(900,.07,'square',.05,.05) } else if(type==='hit'){ tone(200,.12,'sawtooth',.08); tone(120,.12,'sawtooth',.06,.05) } else if(type==='win'){ tone(660,.10,'triangle',.08); tone(880,.10,'triangle',.07,.10); tone(990,.12,'triangle',.07,.20) } }
+      const btnLeft=document.getElementById('btn-left'), btnRight=document.getElementById('btn-right'), btnJump=document.getElementById('btn-jump');
+      function bindHold(btn,down,up){ if(!btn) return; btn.addEventListener('pointerdown',(e)=>{ e.preventDefault(); btn.setPointerCapture?.(e.pointerId); down() }); btn.addEventListener('pointerup',(e)=>{ e.preventDefault(); up() }); btn.addEventListener('pointercancel',up); btn.addEventListener('lostpointercapture',up); btn.addEventListener('pointerleave',up); btn.addEventListener('contextmenu',(e)=>e.preventDefault()) }
+      bindHold(btnLeft, ()=>{ keys.left=true }, ()=>{ keys.left=false }); bindHold(btnRight, ()=>{ keys.right=true }, ()=>{ keys.right=false }); bindHold(btnJump, ()=>{ keys.up=true }, ()=>{ keys.up=false });
+    </script>
+  </body>
+</html>

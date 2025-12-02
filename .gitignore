@@ -1,0 +1,18 @@
+# Python venv and caches
+.venv/
+__pycache__/
+*.pyc
+
+# Build outputs
+dist/
+out/
+build/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
+
+# Logs
+*.log
