@@ -1,12 +1,9 @@
-% Fuga do Macaco Mailon (HTML5 Canvas)
+% Fuga do Macaco Mailon
 
 <img width="1330" height="787" alt="image" src="https://github.com/user-attachments/assets/3f48e22a-ce6c-4a99-aad6-efee47170471" />
 
 
 Jogo 2D em HTML/CSS/JS (Canvas) — controle um macaco Mailon tentando chegar à fronteira sem encostar nos obstáculos. Há uma caixa de "Sonegação" que transforma o macaco em um gorila após ~2 segundos. Fundo com favela (imagem) até metade do mapa e árvores no restante, com transição suave e bandeira de chegada.
-
-## Executar (navegador)
-Abra `jogo-fuga-mapa-brasil/index.html` diretamente no navegador (Chrome/Edge).
 
 ## Executar (desktop com pywebview)
 ```
@@ -15,7 +12,6 @@ python run.py****
 ```
 
 ## Estrutura
-- `jogo-fuga-mapa-brasil/index.html` — jogo completo (Canvas + lógica)
 - `jogo-fuga-mapa-brasil/assets/` — imagens (`lula.png`, `bolsonaro.png`, `favela-back.png`)
 - `run.py` — launcher pywebview
 - `requirements.txt` — dependências (pywebview)
